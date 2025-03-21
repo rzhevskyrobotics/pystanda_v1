@@ -91,6 +91,60 @@ class Axis:
         result = self.lib.set_engine_settings(self.axis_id, byref(eng))
         # Print command return status. It will be 0 if all is OK
         #print("Write command result: " + repr(result))    
+    
+    def get_move_params(self):
+        # Create move settings structure
+        mvst = move_settings_t()
+        # Get current move settings from controller
+        result = self.lib.get_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        return mvst
+    
+    
+    def set_speed(self, speed_steps):
+        # Create move settings structure
+        mvst = move_settings_t()
+        # Get current move settings from controller
+        result = self.lib.get_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Read command result: " + repr(result))
+        print("The speed was equal to {0}. We will change it to {1}".format(mvst.Speed, speed_steps))
+        # Change current speed
+        mvst.Speed = int(speed_steps)
+        # Write new move settings to controller
+        result = self.lib.set_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Write command result: " + repr(result))
+    
+    def set_accel(self, accel_steps):
+        # Create move settings structure
+        mvst = move_settings_t()
+        # Get current move settings from controller
+        result = self.lib.get_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Read command result: " + repr(result))
+        print("The accel was equal to {0}. We will change it to {1}".format(mvst.Accel, accel_steps))
+        # Change current accel
+        mvst.Accel = int(accel_steps)
+        # Write new move settings to controller
+        result = self.lib.set_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Write command result: " + repr(result))
+    
+    def set_decel(self, decel_steps):
+        # Create move settings structure
+        mvst = move_settings_t()
+        # Get current move settings from controller
+        result = self.lib.get_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Read command result: " + repr(result))
+        print("The decel was equal to {0}. We will change it to {1}".format(mvst.Decel, decel_steps))
+        # Change current accel
+        mvst.Decel = int(decel_steps)
+        # Write new move settings to controller
+        result = self.lib.set_move_settings(self.axis_id, byref(mvst))
+        # Print command return status. It will be 0 if all is OK
+        print("Write command result: " + repr(result))
             
     #Получаем статус движения
     def is_moving(self) -> bool:
@@ -153,6 +207,15 @@ if __name__ == "__main__":
     # X(="I") - инвертированная
     axis_X = Axis(lib, device_id_X, True)
     axis_Y = Axis(lib, device_id_Y)
+
+    params = axis_X.get_speed_params()
+
+    print("Speed: ", params.Speed)
+    print("Accel: ", params.Accel)
+    print("Decel: ", params.Decel)
+
+    #ЖУЧАРА!
+    exit()
 
     #"Полезные" действия
     print("Хоминг...")
