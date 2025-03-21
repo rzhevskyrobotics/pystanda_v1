@@ -194,12 +194,12 @@ if __name__ == "__main__":
     # Важно - ось I инвертированная, это важно! Подобрать из портов нужный можно методом тыка
     
     # X = "I" = Axis 1 разъем
-    open_name_X = r"xi-com:\\.\COM44"
+    open_name_X = r"xi-com:\\.\COM25"
     device_id_X = lib.open_device(open_name_X.encode())
     print("Device id X: " + repr(device_id_X))
 
     # X = "J" = Axis 2 разъем
-    open_name_Y = r"xi-com:\\.\COM45"
+    open_name_Y = r"xi-com:\\.\COM26"
     device_id_Y = lib.open_device(open_name_Y.encode())
     print("Device id Y: " + repr(device_id_Y))
 
