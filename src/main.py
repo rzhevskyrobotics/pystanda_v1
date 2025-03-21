@@ -208,13 +208,13 @@ if __name__ == "__main__":
     axis_X = Axis(lib, device_id_X, True)
     axis_Y = Axis(lib, device_id_Y)
 
-    axis_X.set_speed(5000)
-    axis_X.set_accel(5000)
-    axis_X.set_decel(7000)
+    axis_X.set_speed(7000)
+    axis_X.set_accel(7000)
+    axis_X.set_decel(10000)
 
-    axis_Y.set_speed(5000)
-    axis_Y.set_accel(5000)
-    axis_Y.set_decel(7000)
+    axis_Y.set_speed(7000)
+    axis_Y.set_accel(7000)
+    axis_Y.set_decel(10000)
 
     #params = axis_X.get_speed_params()
 
