@@ -1,8 +1,12 @@
 #   Скрипт для управления позиционером STANDA 8MTF, драйвер  8SMC5
-#   Версия 21.03.25, пока сырая. Use it well :)
+#
+#   Для запуска вручную - модифицировать в __main__()!
+# 
+#   Версия 2.04.25, пока сырая. Use it well :)
 
 
 import time
+import math
 
 try: 
     from pyximc import *
@@ -14,6 +18,13 @@ except OSError as err:
     print(err)
     exit()
 
+
+
+#   Дефы для использования standalone
+OPEN_NAME_X_CONTROLLER = r"xi-com:\\.\COM7"
+OPEN_NAME_Y_CONTROLLER = r"xi-com:\\.\COM8"
+DEFAULT_ACCEL = 3000  #steps!
+DEFAULT_DECEL = 3000  #steps!
 
 # Класс для управления осями, в контроллерах их по два. Коварная фигня - оси могут быть инвертированными!
 class Axis:
@@ -91,7 +102,39 @@ class Axis:
         result = self.lib.set_engine_settings(self.axis_id, byref(eng))
         # Print command return status. It will be 0 if all is OK
         #print("Write command result: " + repr(result))    
+            
+    #Получаем статус движения
+    def is_moving(self) -> bool:
+        """
+        Проверяет, движется ли ось.
+        :return: True, если ось в движении, иначе False.
+        """
+        status = self.get_status()
+        return (status.MoveSts > 0) and (status.MvCmdSts & MvcmdStatus.MVCMD_RUNNING) != 0
     
+    def mm_to_steps(self, mm_distance):
+        """
+        Конвертирует расстояние в мм в количество шагов и микрошагов.
+
+        :param mm_distance: Расстояние в мм
+        :return: (steps, usteps) – целые шаги и микрошаги
+        """
+        total_steps = mm_distance / self.step_to_mm_conversion_coeff  # Общее количество шагов (может быть дробным)
+        steps = int(total_steps)  # Целая часть – это полные шаги
+        usteps = int((total_steps - steps) * 256)  # Дробную часть переводим в микрошаги (256 уровней)
+
+        return steps, usteps
+
+    #Для движения по мм
+    def move_mm(self, mm_distance):
+        """
+        Двигает ось на указанное расстояние в мм, автоматически переводя в шаги.
+
+        :param mm_distance: Расстояние в мм
+        """
+        steps, usteps = self.mm_to_steps(mm_distance)
+        return self.move(steps, usteps)
+
     def get_move_params(self):
         # Create move settings structure
         mvst = move_settings_t()
@@ -145,37 +188,25 @@ class Axis:
         result = self.lib.set_move_settings(self.axis_id, byref(mvst))
         # Print command return status. It will be 0 if all is OK
         print("Write command result: " + repr(result))
-            
-    #Получаем статус движения
-    def is_moving(self) -> bool:
-        """
-        Проверяет, движется ли ось.
-        :return: True, если ось в движении, иначе False.
-        """
-        status = self.get_status()
-        return (status.MoveSts > 0) and (status.MvCmdSts & MvcmdStatus.MVCMD_RUNNING) != 0
-    
-    def mm_to_steps(self, mm_distance):
-        """
-        Конвертирует расстояние в мм в количество шагов и микрошагов.
 
-        :param mm_distance: Расстояние в мм
-        :return: (steps, usteps) – целые шаги и микрошаги
+    def wait_for_move(self, timeout_ms=1000, poll_interval_ms=10):
         """
-        total_steps = mm_distance / self.step_to_mm_conversion_coeff  # Общее количество шагов (может быть дробным)
-        steps = int(total_steps)  # Целая часть – это полные шаги
-        usteps = int((total_steps - steps) * 256)  # Дробную часть переводим в микрошаги (256 уровней)
+        Ожидает, пока is_moving() не вернёт True или не истечёт таймаут.
 
-        return steps, usteps
-
-    def move_mm(self, mm_distance):
+        :param is_moving: функция без аргументов, возвращающая True/False
+        :param timeout_ms: максимальное время ожидания в миллисекундах
+        :param poll_interval_ms: интервал между проверками флага (по умолчанию 10 мс)
+        :return: True, если флаг стал True, иначе False по таймауту
         """
-        Двигает ось на указанное расстояние в мм, автоматически переводя в шаги.
+        start = time.time()
+        timeout_sec = timeout_ms / 1000.0
+        poll_interval_sec = poll_interval_ms / 1000.0
 
-        :param mm_distance: Расстояние в мм
-        """
-        steps, usteps = self.mm_to_steps(mm_distance)
-        return self.move(steps, usteps)
+        while (time.time() - start) < timeout_sec:
+            if not self.is_moving():
+                return True
+            time.sleep(poll_interval_sec)
+        return False
 
 # Основная программа
 if __name__ == "__main__":
@@ -194,12 +225,12 @@ if __name__ == "__main__":
     # Важно - ось I инвертированная, это важно! Подобрать из портов нужный можно методом тыка
     
     # X = "I" = Axis 1 разъем
-    open_name_X = r"xi-com:\\.\COM25"
+    open_name_X = OPEN_NAME_X_CONTROLLER
     device_id_X = lib.open_device(open_name_X.encode())
     print("Device id X: " + repr(device_id_X))
 
     # X = "J" = Axis 2 разъем
-    open_name_Y = r"xi-com:\\.\COM26"
+    open_name_Y = OPEN_NAME_Y_CONTROLLER
     device_id_Y = lib.open_device(open_name_Y.encode())
     print("Device id Y: " + repr(device_id_Y))
 
@@ -208,22 +239,27 @@ if __name__ == "__main__":
     axis_X = Axis(lib, device_id_X, True)
     axis_Y = Axis(lib, device_id_Y)
 
-    axis_X.set_speed(7000)
-    axis_X.set_accel(7000)
-    axis_X.set_decel(10000)
+    print("X---") #2000 2000 5000
 
-    axis_Y.set_speed(7000)
-    axis_Y.set_accel(7000)
-    axis_Y.set_decel(10000)
+    params = axis_X.get_speed_params()
 
-    #params = axis_X.get_speed_params()
+    print("Speed: ", params.Speed)
+    print("Accel: ", params.Accel)
+    print("Decel: ", params.Decel)
 
-    #print("Speed: ", params.Speed)
-    #print("Accel: ", params.Accel)
-    #print("Decel: ", params.Decel)
+    print("Y---")
 
-    #ЖУЧАРА!
-    #exit()
+    params = axis_Y.get_speed_params()
+
+    print("Speed: ", params.Speed)
+    print("Accel: ", params.Accel)
+    print("Decel: ", params.Decel)
+
+
+    axis_X.set_accel(DEFAULT_ACCEL)
+    axis_Y.set_accel(DEFAULT_ACCEL)
+    axis_X.set_decel(DEFAULT_DECEL)
+    axis_Y.set_decel(DEFAULT_DECEL)
 
     #"Полезные" действия
     print("Хоминг...")
@@ -241,37 +277,45 @@ if __name__ == "__main__":
     axis_X.move_mm(5.0)
     axis_Y.move_mm(5.0)
 
-    while axis_X.is_moving():
-        time.sleep(0.1)
-    
+    axis_X.wait_for_move(5000)
+    axis_Y.wait_for_move(5000)
+
 
     #Пользовательская пауза. Начнет работу после нажатия на любую клавишу
     input("Нажмите любую клавишу для продолжения...")
 
-    points = [(5, 5), (7, 5), (7, 7), (5, 7)]  # Массив точек (X, Y)
-    index = 0  # Начальный индекс
-    threshold_mm = 1.7  # МАГИЧЕСКИЙ ПАРАМЕТР. Пока его нужно подбирать. Суть - начинается новое движение тогда, когда до цели осталось меньше, чем ЭТО
+    #Движение "по кругу"
 
-    #Начинаем движение по циклу. Прерывать Ctrl-C
-    while True:
-        x_target, y_target = points[index]  # Берём следующую цель
-        print(f"Двигаемся к точке ({x_target}, {y_target})")
+    steps = 50
+    radius = 2
+    center_x = 5
+    center_y = 5
 
-        axis_X.move_mm(x_target)
-        axis_Y.move_mm(y_target)
+    for i in range(steps + 1):
+        angle = 2 * math.pi * i / steps
+        x = center_x + radius * math.cos(angle)
+        y = center_y + radius * math.sin(angle)
 
-        while True:
-            # Получаем текущие координаты
-            x_current = -(axis_X.get_status().CurPosition) * axis_X.step_to_mm_conversion_coeff
-            y_current = axis_Y.get_status().CurPosition * axis_Y.step_to_mm_conversion_coeff
+        axis_X.move_mm(x)
+        axis_Y.move_mm(y)
 
-            # Рассчитываем оставшееся расстояние
-            distance_x = abs(x_target - x_current)
-            distance_y = abs(y_target - y_current)
+        axis_X.wait_for_move(5000)
+        axis_Y.wait_for_move(5000)
 
-            # Проверяем, нужно ли стартовать следующее движение
-            if distance_x <= threshold_mm and distance_y <= threshold_mm:
-                index = (index + 1) % len(points)  # Переход к следующей точке
-                break  # Начинаем следующее движение
+    # #Начинаем движение по циклу. Прерывать Ctrl-C
+    # points = [(5, 5), (7, 5), (7, 7), (5, 7)]  # Массив точек (X, Y)
+    # index = 0  # Начальный индекс
+    # while True:
 
-            time.sleep(0.1)  # Проверяем статус каждые 100 мс
+    #     x_target, y_target = points[index]  # Берём следующую цель
+    #     print(f"Двигаемся к точке ({x_target}, {y_target})")
+
+    #     axis_X.move_mm(x_target)
+    #     axis_Y.move_mm(y_target)
+
+    #     axis_X.wait_for_move(5000)
+    #     axis_Y.wait_for_move(5000)
+
+    #     index = index + 1
+    #     if index >= len(points):
+    #         index = 0
